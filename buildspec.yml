@@ -16,7 +16,7 @@ phases:
   build:
     commands:
       - dotnet publish \
-          -c $CONFIGURATION \
+          -c:$CONFIGURATION \
           -p:DeploymentBucket=$ARTIFACT_STORE \
           -p:Deploy=false \
           -p:PackagedFile=$(pwd)/certificate.template.yml \

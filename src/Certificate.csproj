@@ -18,7 +18,7 @@
 
   <Target Name="CreateConfigFile" AfterTargets="GenerateCodeFromAttributesCore">
     <PropertyGroup>
-      <CrossAccountConfigFile Condition="$(AgentConfigFile) == ''">$(OutputPath)cross-account.config.json</CrossAccountConfigFile>
+      <CrossAccountConfigFile Condition="$(CrossAccountConfigFile) == ''">$(OutputPath)cross-account.config.json</CrossAccountConfigFile>
       <_ResourceTemplateFile>$(OutputPath)Certificate.template.yml</_ResourceTemplateFile>
       <_CertificatePermissionsFile>$(OutputPath)Certificate.permissions.txt</_CertificatePermissionsFile>
     </PropertyGroup>

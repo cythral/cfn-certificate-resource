@@ -1,4 +1,4 @@
-Description: CICD pipeline for cfn
+Description: CICD pipeline for cfn-certificate-resource
 Parameters:
   GithubToken:
     Type: String
@@ -160,7 +160,17 @@ Resources:
                   }
         - Name: Prod
           Actions:
+            - Name: Approve
+              RunOrder: 1
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              InputArtifacts: []
+              OutputArtifacts: []
             - Name: Deploy
+              RunOrder: 2
               RoleArn: !ImportValue cfn-metadata:ProdAgentRoleArn
               ActionTypeId:
                 Category: Deploy

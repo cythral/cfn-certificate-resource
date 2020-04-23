@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <StackName>cfn-certificate-resource</StackName>
+    <StackDescription>DNS-Validated Certificate Custom Resource with Cross-Account Support</StackDescription>
+    <GenerateCodeFromAttributesCore>$(GenerateCodeFromAttributesCore);CreateConfigFile</GenerateCodeFromAttributesCore>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.CertificateManager" Version="3.3.101.62" />
+    <PackageReference Include="AWSSDK.Lambda" Version="3.3.109.11" />
+    <PackageReference Include="AWSSDK.Route53" Version="3.3.102.111" />
+    <PackageReference Include="AWSSDK.SecurityToken" Version="3.3.104.63" />
+    <PackageReference Include="Cythral.CloudFormation.CustomResource" Version="0.2.21-alpha" />
+    <PackageReference Include="System.ComponentModel.Annotations" Version="4.7.0" />
+  </ItemGroup>
+
+  <Target Name="CreateConfigFile" AfterTargets="GenerateCodeFromAttributesCore">
+    <PropertyGroup>
+      <CrossAccountConfigFile Condition="$(AgentConfigFile) == ''">$(OutputPath)cross-account.config.json</CrossAccountConfigFile>
+      <_ResourceTemplateFile>$(OutputPath)Certificate.template.yml</_ResourceTemplateFile>
+      <_CertificatePermissionsFile>$(OutputPath)Certificate.permissions.txt</_CertificatePermissionsFile>
+    </PropertyGroup>
+
+    <ReadLinesFromFile File="$(_CertificatePermissionsFile)">
+      <Output TaskParameter="Lines" ItemName="CertificatePermissions" />
+    </ReadLinesFromFile>
+
+    <ItemGroup>
+      <_AcmCertificatePermissions 
+        Include="@(CertificatePermissions)" 
+        Condition="$([System.String]::Copy('%(Identity)').StartsWith('acm'))" 
+        />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_CrossAccountConfigFileLines>
+{
+    "Parameters": {
+        "AcmPermissions": "@(_AcmCertificatePermissions, ',')"
+    }
+}
+      </_CrossAccountConfigFileLines>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(CrossAccountConfigFile)" Lines="$(_CrossAccountConfigFileLines)" Overwrite="True" />
+
+    <ItemGroup>
+      <FileWrites Include="$(CrossAccountConfigFile)" />
+      <FileWrites Include="$(PackageFile)" />
+      <FileWrites Include="$(_ResourceTemplateFile)" />
+      <FileWrites Include="$(_CertificatePermissionsFile)" />
+    </ItemGroup>
+  </Target>
+</Project>

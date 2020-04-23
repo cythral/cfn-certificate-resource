@@ -1,0 +1,49 @@
+Description: Roles and permissions needed for using a Certificate Custom Resource deployed to a different account.
+
+Parameters:
+  CertificateLambdaArn:
+    Type: String
+    Description: ARN of the Lambda-backed Certificate Custom Resource.  
+
+  AcmPermissions:
+    Type: CommaDelimitedList
+    Description: List of required acm permissions needed to create a certificate in the agent account.
+
+Resources:
+  CreatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              AWS: !Ref CertificateLambdaArn
+
+  CreatorPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: !Ref AcmPermissions
+            Resource: "*"
+      Roles:
+        - !Ref CreatorRole
+
+Outputs:
+  CertificateLambdaArn:
+    Value: !Ref CertificateLambdaArn
+    Description: ARN of the lambda for the certificate custom resource
+    Export:
+      Name: !Sub ${AWS::StackName}:CertificateLambdaArn
+      
+  CreatorRoleArn:
+    Value: !GetAtt CreatorRole.Arn
+    Description: ARN of the certificate creator role.
+    Export:
+      Name: !Sub ${AWS::StackName}:CreatorRoleArn
+
+  

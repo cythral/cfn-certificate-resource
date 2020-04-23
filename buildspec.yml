@@ -15,11 +15,11 @@ phases:
 
   build:
     commands:
-      - dotnet publish  \
-          -c $CONFIGURATION \
-          /p:DeploymentBucket=$ARTIFACT_STORE \
-          /p:Deploy=false \
-          /p:PackagedFile=$(pwd)/certificate.template.yml \
+      - dotnet publish
+          -c $CONFIGURATION
+          /p:DeploymentBucket=$ARTIFACT_STORE
+          /p:Deploy=false
+          /p:PackagedFile=$(pwd)/certificate.template.yml
           /p:CrossAccountConfigFile=$(pwd)/cross-account.config.json
       - dotnet test -c $CONFIGURATION
 

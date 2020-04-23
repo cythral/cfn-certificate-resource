@@ -155,6 +155,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM
                 ParameterOverrides: |
                   {
+                    "CertificateRoleArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateRoleArn" ] }
                     "CertificateLambdaArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateLambdaArn" ] }
                   }
         - Name: Prod
@@ -178,6 +179,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM
                 ParameterOverrides: |
                   {
+                    "CertificateRoleArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateRoleArn" ] }
                     "CertificateLambdaArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateLambdaArn" ] }
                   }
 

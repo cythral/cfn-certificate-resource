@@ -4,6 +4,10 @@ Parameters:
   CertificateLambdaArn:
     Type: String
     Description: ARN of the Lambda-backed Certificate Custom Resource.  
+  
+  CertificateRoleArn:
+    Type: String
+    Description: ARN of the exeuction role the Certificate Custom Resource uses in the master account. 
 
   AcmPermissions:
     Type: CommaDelimitedList
@@ -19,7 +23,7 @@ Resources:
           - Effect: Allow
             Action: sts:AssumeRole
             Principal:
-              AWS: !Ref CertificateLambdaArn
+              AWS: !Ref CertificateRoleArn
 
   CreatorPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -36,10 +40,14 @@ Resources:
 Outputs:
   CertificateLambdaArn:
     Value: !Ref CertificateLambdaArn
-    Description: ARN of the lambda for the certificate custom resource
+    Description: ARN of the lambda for the Certificate Custom Resource.
     Export:
       Name: !Sub ${AWS::StackName}:CertificateLambdaArn
-      
+
+  CertificateRoleArn:
+    Value: !Ref CertificateRoleArn
+    Description: ARN of the role the Certificate Custom Resource uses in the master account.
+
   CreatorRoleArn:
     Value: !GetAtt CreatorRole.Arn
     Description: ARN of the certificate creator role.

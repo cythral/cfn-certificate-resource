@@ -12,7 +12,7 @@
     <PackageReference Include="AWSSDK.Lambda" Version="3.3.109.11" />
     <PackageReference Include="AWSSDK.Route53" Version="3.3.102.111" />
     <PackageReference Include="AWSSDK.SecurityToken" Version="3.3.104.63" />
-    <PackageReference Include="Cythral.CloudFormation.CustomResource" Version="0.2.21-alpha" />
+    <PackageReference Include="Cythral.CloudFormation.CustomResource" Version="0.2.24-alpha" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="4.7.0" />
   </ItemGroup>
 

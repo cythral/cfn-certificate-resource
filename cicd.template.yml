@@ -43,6 +43,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub ${AWS::StackName}-build
+      BadgeEnabled: true
       ServiceRole: !ImportValue cfn-utilities:BuilderRoleArn
       EncryptionKey: !ImportValue cfn-utilities:ArtifactKeyArn
       Environment:
@@ -52,145 +53,219 @@ Resources:
           - Name: ARTIFACT_STORE
             Value: !Ref ArtifactStore
         Type: LINUX_CONTAINER
+      Cache:
+        Type: LOCAL
+        Modes:
+          - LOCAL_DOCKER_LAYER_CACHE
       Artifacts:
-        Type: CODEPIPELINE
-      Source: 
-        Type: CODEPIPELINE
-  
-  Webhook:
-    Type: AWS::CodePipeline::Webhook
-    Properties:
-      Authentication: GITHUB_HMAC
-      AuthenticationConfiguration:
-        SecretToken: !Ref GithubToken
-      Filters:
-        - JsonPath: $.ref
-          MatchEquals: "refs/heads/{Branch}"
-      TargetPipeline: !Ref Pipeline
-      TargetAction: Source
-      TargetPipelineVersion: !GetAtt Pipeline.Version
-      RegisterWithThirdParty: true
-
-  Pipeline:
-    Type: AWS::CodePipeline::Pipeline
-    Properties:
-      Name: !Sub ${AWS::StackName}-pipeline 
-      ArtifactStore:
         Type: S3
         Location: !Ref ArtifactStore
-        EncryptionKey: 
-          Id: !ImportValue cfn-utilities:ArtifactKeyArn
-          Type: KMS
-      RoleArn: !ImportValue cfn-utilities:MasterRoleArn
-      RestartExecutionOnUpdate: true
-      Stages:
-        - Name: Source
-          Actions:
-            - Name: Source
-              ActionTypeId:
-                Category: Source
-                Provider: GitHub
-                Owner: ThirdParty
-                Version: 1
-              OutputArtifacts:
-                - Name: sourceCode
-              Configuration:
-                Owner: !Ref GithubOwner
-                Repo: !Ref GithubRepo
-                Branch: !Ref GithubBranch
-                OAuthToken: !Ref GithubToken
-                PollForSourceChanges: false
-        - Name: Build
-          Actions:
-            - Name: Build
-              ActionTypeId:
-                Category: Build
-                Provider: CodeBuild
-                Owner: AWS
-                Version: 1
-              InputArtifacts:
-                - Name: sourceCode
-              OutputArtifacts:
-                - Name: buildResults
-              Configuration:
-                ProjectName: !Ref BuildProject
-        - Name: Shared
-          Actions:
-            - Name: Deploy
-              RunOrder: 1
-              ActionTypeId:
-                Category: Deploy
-                Provider: CloudFormation
-                Owner: AWS
-                Version: 1
-              InputArtifacts:
-                - Name: buildResults
-              OutputArtifacts:
-                - Name: certificateOutputs
-              Configuration:
-                StackName: cfn-certificate-resource
-                ActionMode: CREATE_UPDATE
-                TemplatePath: buildResults::certificate.template.yml
-                RoleArn: !ImportValue cfn-utilities:MasterRoleArn
-                Capabilities: CAPABILITY_IAM
-                OutputFileName: certificate-outputs.json
-        - Name: Dev
-          Actions:
-            - Name: Deploy
-              RoleArn: !ImportValue cfn-metadata:DevAgentRoleArn
-              ActionTypeId:
-                Category: Deploy
-                Provider: CloudFormation
-                Owner: AWS
-                Version: 1
-              InputArtifacts:
-                - Name: buildResults
-                - Name: certificateOutputs
-              Configuration:
-                StackName: cfn-certificate-resource
-                ActionMode: CREATE_UPDATE
-                TemplatePath: buildResults::cross-account.template.yml
-                TemplateConfiguration: buildResults::cross-account.config.json
-                RoleArn: !ImportValue cfn-metadata:DevAgentRoleArn
-                Capabilities: CAPABILITY_IAM
-                ParameterOverrides: |
-                  {
-                    "CertificateRoleArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateRoleArn" ] },
-                    "CertificateLambdaArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateLambdaArn" ] }
-                  }
-        - Name: Prod
-          Actions:
-            - Name: Approve
-              RunOrder: 1
-              ActionTypeId:
-                Category: Approval
-                Owner: AWS
-                Provider: Manual
-                Version: 1
-              InputArtifacts: []
-              OutputArtifacts: []
-            - Name: Deploy
-              RunOrder: 2
-              RoleArn: !ImportValue cfn-metadata:ProdAgentRoleArn
-              ActionTypeId:
-                Category: Deploy
-                Provider: CloudFormation
-                Owner: AWS
-                Version: 1
-              InputArtifacts:
-                - Name: buildResults
-                - Name: certificateOutputs
-              Configuration:
-                StackName: cfn-certificate-resource
-                ActionMode: CREATE_UPDATE
-                TemplatePath: buildResults::cross-account.template.yml
-                TemplateConfiguration: buildResults::cross-account.config.json
-                RoleArn: !ImportValue cfn-metadata:ProdAgentRoleArn
-                Capabilities: CAPABILITY_IAM
-                ParameterOverrides: |
-                  {
-                    "CertificateRoleArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateRoleArn" ] },
-                    "CertificateLambdaArn": { "Fn::GetParam": [ "certificateOutputs", "certificate-outputs.json", "CertificateLambdaArn" ] }
-                  }
+        Name: buildResults.zip
+        NamespaceType: BUILD_ID
+        Packaging: ZIP
+      Source:
+        Type: GITHUB
+        Location: !Sub https://github.com/${GithubOwner}/${GithubRepo}.git
+        ReportBuildStatus: true
+  
+  SupersessionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      ContentBasedDeduplication: true
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600
 
-            
+  SupersessionEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !ImportValue cfn-core:DeploymentSupersessionFunctionArn
+      EventSourceArn: !GetAtt SupersessionQueue.Arn
+
+  DeploymentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      ContentBasedDeduplication: true
+      VisibilityTimeout: 3600
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600
+
+  DeploymentEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !ImportValue cfn-core:StackDeploymentFunctionArn
+      EventSourceArn: !GetAtt DeploymentQueue.Arn
+
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !ImportValue cfn-utilities:MasterRoleArn
+      StateMachineName: !Sub ${AWS::StackName}-pipeline
+      DefinitionString: !Sub
+        - |
+          {
+            "StartAt": "Build",
+            "States": {
+              "Build": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::codebuild:startBuild.sync",
+                "Parameters": {
+                  "ProjectName": "${BuildProject}",
+                  "SourceVersion.$": "$.head_commit.id"
+                },
+                "ResultPath": "$.BuildOutput",
+                "Next": "On Default Branch?"
+              },
+              "On Default Branch?": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.on_default_branch",
+                    "BooleanEquals": true,
+                    "Next": "Check if Superseded"
+                  },
+                  {
+                    "Variable": "$.on_default_branch",
+                    "BooleanEquals": false,
+                    "Next": "Success"
+                  } 
+                ]
+              },
+              "Check if Superseded": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+                "ResultPath": "$.SupersededOutput",
+                "Next": "Was Superseded?",
+                "Parameters": {
+                  "QueueUrl": "${SupersessionQueue}",
+                  "MessageGroupId": "${GithubRepo}",
+                  "MessageBody": {
+                    "Pipeline": "${GithubRepo}",
+                    "CommitTimestamp.$": "$.head_commit.timestamp",
+                    "Token.$": "$$.Task.Token"
+                  }
+                }
+              },
+              "Was Superseded?": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.SupersededOutput.Superseded",
+                    "BooleanEquals": true,
+                    "Next": "Success"
+                  },
+                  {
+                    "Variable": "$.SupersededOutput.Superseded",
+                    "BooleanEquals": false,
+                    "Next": "Deploy to Shared"
+                  }
+                ]
+              },
+              "Deploy to Shared": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+                "ResultPath": "$.SharedOutputs",
+                "Parameters": {
+                  "QueueUrl": "${DeploymentQueue}",
+                  "MessageGroupId": "${GithubRepo}",
+                  "MessageBody": {
+                    "StackName": "${GithubRepo}",
+                    "ZipLocation.$": "$.BuildOutput.Build.Artifacts.Location",
+                    "TemplateFileName": "certificate.template.yml",
+                    "RoleArn": "${SharedRoleArn}",
+                    "Token.$": "$$.Task.Token",
+                    "Capabilities": [
+                      "CAPABILITY_IAM"
+                    ]
+                  }
+                },
+                "Next": "Deploy to Dev"
+              },
+              "Deploy to Dev": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+                "ResultPath": null,
+                "Parameters": {
+                  "QueueUrl": "${DeploymentQueue}",
+                  "MessageGroupId": "${GithubRepo}",
+                  "MessageBody": {
+                    "StackName": "${GithubRepo}",
+                    "ZipLocation.$": "$.BuildOutput.Build.Artifacts.Location",
+                    "TemplateFileName": "cross-account.template.yml",
+                    "TemplateConfigurationFileName": "cross-account.config.json",
+                    "RoleArn": "${DevRoleArn}",
+                    "Token.$": "$$.Task.Token",
+                    "ParameterOverrides": {
+                      "CertificateRoleArn.$": "$.SharedOutputs.CertificateRoleArn",
+                      "CertificateLambdaArn.$": "$.SharedOutputs.CertificateLambdaArn"
+                    },
+                    "Capabilities": [
+                      "CAPABILITY_IAM"
+                    ]
+                  }
+                },
+                "Next": "Ask for Approval"
+              },
+              "Ask for Approval": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                "Next": "Was Approved?",
+                "ResultPath": "$.ApprovalDecision",
+                "Parameters": {
+                  "FunctionName": "${ApprovalNotificationFunction}",
+                  "Payload": {
+                    "Pipeline": "${GithubRepo}",
+                    "ArtifactStore": "${ArtifactStore}",
+                    "CustomMessage": "${GithubRepo} requires manual approval for deployment to production",
+                    "Token.$": "$$.Task.Token"
+                  }
+                }
+              },
+              "Was Approved?": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.ApprovalDecision.Action",
+                    "StringEquals": "approve",
+                    "Next": "Deploy to Prod"
+                  },
+                  {
+                    "Variable": "$.ApprovalDecision.Action",
+                    "StringEquals": "reject",
+                    "Next": "Success"
+                  }
+                ]
+              },
+              "Deploy to Prod": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+                "ResultPath": null,
+                "Parameters": {
+                  "QueueUrl": "${DeploymentQueue}",
+                  "MessageGroupId": "${GithubRepo}",
+                  "MessageBody": {
+                    "StackName": "${GithubRepo}",
+                    "ZipLocation.$": "$.BuildOutput.Build.Artifacts.Location",
+                    "TemplateFileName": "cross-account.template.yml",
+                    "TemplateConfigurationFileName": "cross-account.config.json",
+                    "RoleArn": "${ProdRoleArn}",
+                    "Token.$": "$$.Task.Token",
+                    "ParameterOverrides": {
+                      "CertificateRoleArn.$": "$.SharedOutputs.CertificateRoleArn",
+                      "CertificateLambdaArn.$": "$.SharedOutputs.CertificateLambdaArn"
+                    },
+                    "Capabilities": [
+                      "CAPABILITY_IAM"
+                    ]
+                  }
+                },
+                "Next": "Success"
+              },
+              "Success": {
+                "Type": "Succeed"
+              }
+            }
+          }
+        - DevRoleArn: !ImportValue cfn-metadata:DevAgentRoleArn
+          ProdRoleArn: !ImportValue cfn-metadata:ProdAgentRoleArn
+          SharedRoleArn: !ImportValue cfn-utilities:MasterRoleArn
+          ApprovalNotificationFunction: cfn-core-ApprovalNotificationFunction-14V53I9N6Z2YZ

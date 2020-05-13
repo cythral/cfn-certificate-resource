@@ -269,3 +269,4 @@ Resources:
           ProdRoleArn: !ImportValue cfn-metadata:ProdAgentRoleArn
           SharedRoleArn: !ImportValue cfn-utilities:MasterRoleArn
           ApprovalNotificationFunction: cfn-core-ApprovalNotificationFunction-14V53I9N6Z2YZ
+ 

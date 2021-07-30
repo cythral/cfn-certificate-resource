@@ -8,10 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.CertificateManager" Version="3.7.1.4" />
-    <PackageReference Include="AWSSDK.Lambda" Version="3.7.2.3" />
-    <PackageReference Include="AWSSDK.Route53" Version="3.7.1.1" />
-    <PackageReference Include="AWSSDK.SecurityToken" Version="3.7.1.36" />
+    <PackageReference Include="AWSSDK.CertificateManager" Version="3.7.1.5" />
+    <PackageReference Include="AWSSDK.Lambda" Version="3.7.2.4" />
+    <PackageReference Include="AWSSDK.Route53" Version="3.7.1.2" />
+    <PackageReference Include="AWSSDK.SecurityToken" Version="3.7.1.37" />
     <PackageReference Include="Cythral.CloudFormation.CustomResource" Version="0.2.24-alpha" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
   </ItemGroup>

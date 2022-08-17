@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.CertificateManager" Version="3.7.1.151" />
-    <PackageReference Include="AWSSDK.Lambda" Version="3.7.13.35" />
+    <PackageReference Include="AWSSDK.Lambda" Version="3.7.14" />
     <PackageReference Include="AWSSDK.Route53" Version="3.7.3.26" />
     <PackageReference Include="AWSSDK.SecurityToken" Version="3.7.1.186" />
     <PackageReference Include="Cythral.CloudFormation.CustomResource" Version="0.2.24-alpha" />
